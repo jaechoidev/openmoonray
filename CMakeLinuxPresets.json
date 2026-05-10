@@ -69,6 +69,61 @@
                 "CMAKE_INSTALL_PREFIX": "${sourceParentDir}/../installs/openmoonray"
             },
             "generator": "Unix Makefiles"
+        },
+        {
+            "name": "gaffer-environment",
+            "hidden": true,
+            "environment": {
+                "DEPS_ROOT"                     : "/work/_install/gaffer-deps",
+                "BUILD_DIR"                     : "/work/_build/moonray",
+                "Boost_ROOT"                    : "$env{DEPS_ROOT}",
+                "ISPC"                          : "$env{DEPS_ROOT}/bin/ispc",
+                "OpenSubDiv_ROOT"               : "$env{DEPS_ROOT}",
+                "OpenVDB_ROOT"                  : "$env{DEPS_ROOT}",
+                "PXR_USD_LOCATION"              : "$env{DEPS_ROOT}",
+                "PXR_INCLUDE_DIRS"              : "$env{DEPS_ROOT}/include",
+                "Random123_ROOT"                : "$env{DEPS_ROOT}",
+                "OIIO_PYTHON"                   : "$env{DEPS_ROOT}/lib/python3.11/site-packages",
+                "CppUnit_ROOT"                  : "/usr",
+                "JsonCpp_ROOT"                  : "/usr",
+                "Libcurl_ROOT"                  : "/usr",
+                "Libuuid_ROOT"                  : "/usr",
+                "Log4cplus_ROOT"                : "$env{DEPS_ROOT}",
+                "Microhttpd_ROOT"               : "$env{DEPS_ROOT}",
+                "LUA_DIR"                       : "/usr",
+                "ZLIB_ROOT"                     : "/usr",
+                "LD_LIBRARY_PATH"               : "$env{DEPS_ROOT}/lib:$env{DEPS_ROOT}/lib64"
+            },
+            "cacheVariables": {
+                "CMAKE_PREFIX_PATH": "/work/_install/gaffer-deps-shim;$env{DEPS_ROOT}",
+                "PYTHON_EXECUTABLE": "$env{DEPS_ROOT}/bin/python3.11",
+                "Python_EXECUTABLE": "$env{DEPS_ROOT}/bin/python3.11",
+                "Python_ROOT_DIR": "$env{DEPS_ROOT}",
+                "Python_FIND_STRATEGY": "LOCATION",
+                "Python3_EXECUTABLE": "$env{DEPS_ROOT}/bin/python3.11",
+                "Python3_ROOT_DIR": "$env{DEPS_ROOT}",
+                "Python3_FIND_STRATEGY": "LOCATION",
+                "Python_INCLUDE_DIR": "$env{DEPS_ROOT}/include/python3.11",
+                "Python_LIBRARY": "$env{DEPS_ROOT}/lib/libpython3.11.so",
+                "Python3_INCLUDE_DIR": "$env{DEPS_ROOT}/include/python3.11",
+                "Python3_LIBRARY": "$env{DEPS_ROOT}/lib/libpython3.11.so",
+                "BOOST_PYTHON_COMPONENT_NAME": "python311",
+                "ABI_VERSION": "0",
+                "BUILD_QT_APPS": "NO",
+                "BUILD_TESTING": "NO",
+                "MOONRAY_USE_OPTIX": "NO"
+            }
+        },
+        {
+            "name": "gaffer-release",
+            "displayName": "Gaffer-aligned Release (Rocky8 + gaffer-deps tarball)",
+            "inherits": "gaffer-environment",
+            "binaryDir": "$env{BUILD_DIR}",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_INSTALL_PREFIX": "/work/_install/moonray-gaffer"
+            },
+            "generator": "Unix Makefiles"
         }
     ],
     "buildPresets": [
@@ -83,6 +138,13 @@
             "name": "rocky9-houdini-release",
             "displayName": "Rocky9 Release (Houdini)",
             "configurePreset": "rocky9-houdini-release",
+            "configuration": "Release",
+            "targets": ["install"]
+        },
+        {
+            "name": "gaffer-release",
+            "displayName": "Gaffer-aligned Release",
+            "configurePreset": "gaffer-release",
             "configuration": "Release",
             "targets": ["install"]
         }
