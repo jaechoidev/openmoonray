@@ -1,0 +1,28 @@
+Make Moonray's regression test suite (rats/) opt-in via BUILD_TESTING.
+
+Rationale:
+  rats/CMakeLists.txt requires the OpenImageIO `idiff` CLI tool for image
+  diffing, but the Gaffer dep tarball
+  (gafferDependencies-11.0.0a6-linux-platform25) ships only `oiiotool` and
+  `maketx` — not `idiff`. Phase 0 of the Gaffer port doesn't need image
+  regression tests; gating rats on BUILD_TESTING (which our preset sets to
+  OFF for now) lets the configure proceed cleanly. Upstream uses CTest's
+  BUILD_TESTING idiom elsewhere, so this is consistent with the surrounding
+  conventions.
+
+Apply path: openmoonray top-level (scope: building, target dir: ".").
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -79,7 +79,9 @@ find_package(TBB REQUIRED)
+ # ================================================
+ add_subdirectory(arras)
+ add_subdirectory(moonray)
+-add_subdirectory(rats)
++if(BUILD_TESTING)
++    add_subdirectory(rats)
++endif()
+ add_subdirectory(scripts)
+
+ if(GLD STREQUAL "$ENV{STUDIO}")

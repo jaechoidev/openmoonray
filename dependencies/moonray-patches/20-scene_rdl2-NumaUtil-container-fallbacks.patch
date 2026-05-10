@@ -1,0 +1,133 @@
+NUMA topology container fallbacks for scene_rdl2/NumaUtil.
+
+Allows Moonray to run on Linux hosts that don't expose
+/sys/devices/system/node/ (typically containers — macOS Docker
+Desktop's Linux VM, Kubernetes pods with NUMA hidden, etc.).
+
+Gating: every fallback uses `if (!probe.is_open()) { fallback }
+else { original }`. Real Linux hosts with `/sys/devices/system/node/`
+populated hit the original code path unchanged. Production NUMA
+behavior is preserved.
+
+The mbind() syscall fallback is the one exception — it's
+unconditional once mbind() returns nonzero. On a real NUMA host
+mbind() should succeed and the fallback path doesn't execute. On
+a degraded-NUMA host (cgroup restrictions, unusual kernel) what was
+previously a hard throw is now a logged warning + default kernel
+page placement. A warn-once is emitted to stderr so the deviation
+is observable.
+
+Apply path: scene_rdl2 submodule (scope: scene_rdl2).
+
+diff --git a/lib/common/grid_util/NumaUtil.cc b/lib/common/grid_util/NumaUtil.cc
+index 7d88815..cd17dde 100644
+--- a/lib/common/grid_util/NumaUtil.cc
++++ b/lib/common/grid_util/NumaUtil.cc
+@@ -7,6 +7,7 @@
+ #include <scene_rdl2/render/util/StrUtil.h>
+ 
+ #include <algorithm>
++#include <atomic> // mbind warn-once flag
+ #include <cstdint>
+ #include <fstream>
+ #include <iostream> // debug
+@@ -139,10 +140,19 @@ getNumaNodeIdTbl(const std::string& modeStr)
+     
+     if (modeStr == "localhost") {
+ #ifdef PLATFORM_APPLE
+-        setTbl(1); // Mac is UMA, we return single id. 
+-#else // !PLATFORM_APPLE    
++        setTbl(1); // Mac is UMA, we return single id.
++#else // !PLATFORM_APPLE
+         constexpr const char* infoFileName = "/sys/devices/system/node/online";
+-        tbl = getIdTbl(infoFileName); // sorted
++        // Containers (e.g. macOS Docker Desktop's Linux VM) may not expose
++        // /sys/devices/system/node/. Treat that as UMA single-node rather
++        // than hard-failing.
++        std::ifstream probe(infoFileName);
++        if (!probe.is_open()) {
++            setTbl(1);
++        } else {
++            probe.close();
++            tbl = getIdTbl(infoFileName); // sorted
++        }
+ #endif // end of !PLATFORM_APPLE
+     } else if (modeStr == "ag") {
+         setTbl(8);
+@@ -191,9 +201,14 @@ getLocalhostNumaNodeMemSize(const unsigned numaNodeId)
+ 
+     std::ifstream ifs(getInfoFileName());
+     if (!ifs) {
+-        std::ostringstream ostr;
+-        ostr << "NumaUtil::getNumaNodeMemSize() Can not open file:" << getInfoFileName();
+-        throw scene_rdl2::except::RuntimeError(ostr.str());
++        // Container without NUMA topology (e.g. macOS Docker Desktop's
++        // Linux VM): synthesize total system memory.
++        const long pageSize = sysconf(_SC_PAGE_SIZE);
++        const long pages    = sysconf(_SC_PHYS_PAGES);
++        if (pageSize > 0 && pages > 0) {
++            return static_cast<size_t>(pageSize) * static_cast<size_t>(pages);
++        }
++        return 0;
+     }
+ 
+     std::string str;
+@@ -289,6 +304,17 @@ getLocalhostNumaNodeCpuIdTbl(const unsigned numaNodeId)
+         ostr << infoFilePrefix << numaNodeId << "/cpulist";
+         return ostr.str();
+     };
++    // Container without NUMA topology: synthesize a single node owning
++    // every online CPU.
++    {
++        std::ifstream probe(getInfoFileName());
++        if (!probe.is_open()) {
++            std::vector<unsigned> tbl;
++            const long n = sysconf(_SC_NPROCESSORS_ONLN);
++            for (long i = 0; i < n; ++i) tbl.push_back(static_cast<unsigned>(i));
++            return tbl;
++        }
++    }
+     return getIdTbl(getInfoFileName());
+ #endif // end of !PLATFORM_APPLE 
+ }
+@@ -385,6 +411,16 @@ getLocalhostNumaNodeDistance(const unsigned numaNodeId)
+ 
+     std::vector<int> distanceTbl;
+ 
++    // Container without NUMA topology: synthesize "self distance" 10
++    // (the conventional NUMA distance for a node to itself).
++    {
++        std::ifstream probe(getInfoFileName());
++        if (!probe.is_open()) {
++            distanceTbl.push_back(10);
++            return distanceTbl;
++        }
++    }
++
+     std::ostringstream ostr;
+     std::string errMsg;
+     std::string line = getSingleLine(getInfoFileName(), errMsg);
+@@ -509,10 +545,19 @@ numaNodeMBind(const unsigned numaNodeId,
+                      nodeMask.data(),
+                      nodeMask.size() * BITS_PER_ULONG,
+                      0) != 0) {
+-        munmap(memory, size);
+-        std::ostringstream ostr;
+-        ostr << "numaNodeMBInd() sysCallMBind() failed. numaNodeId:" << numaNodeId << " size:" << size;
+-        throw scene_rdl2::except::RuntimeError(ostr.str());
++        // Container kernels without NUMA topology (e.g. macOS Docker
++        // Desktop's Linux VM) reject mbind. The mmap'd memory is still
++        // usable; just leave the kernel to allocate pages wherever.
++        // (Don't throw — that would unmap a perfectly good arena.)
++        // Log the deviation so degraded-NUMA hosts (cgroup-restricted,
++        // unusual kernel) are diagnosable rather than silently slow.
++        static std::atomic<bool> warned{false};
++        if (!warned.exchange(true)) {
++            std::cerr << "NumaUtil: mbind() rejected for numaNodeId=" << numaNodeId
++                      << " (errno=" << errno << "). Falling back to default kernel"
++                      << " page placement. This warning prints once per process."
++                      << std::endl;
++        }
+     }
+     return memory;
+ }

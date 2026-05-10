@@ -1,0 +1,12 @@
+diff --git a/arras4_client/lib/log_client/CMakeLists.txt b/arras4_client/lib/log_client/CMakeLists.txt
+index deeef38..d2ee6e2 100644
+--- a/arras4_client/lib/log_client/CMakeLists.txt
++++ b/arras4_client/lib/log_client/CMakeLists.txt
+@@ -21,6 +21,7 @@ set_property(TARGET ${LibName}
+ 
+ target_link_libraries(${LibName}
+     PUBLIC
++        Boost::headers
+         ${PROJECT_NAME}::arras4_log
+         ${PROJECT_NAME}::http
+         ${PROJECT_NAME}::message_api

@@ -1,0 +1,68 @@
+diff --git a/cmd/hd_cmd/hd_render/CMakeLists.txt b/cmd/hd_cmd/hd_render/CMakeLists.txt
+index 6ac48cb..2d4713c 100644
+--- a/cmd/hd_cmd/hd_render/CMakeLists.txt
++++ b/cmd/hd_cmd/hd_render/CMakeLists.txt
+@@ -30,6 +30,7 @@ target_link_libraries(${target}
+         cameraUtil hd hdx hf  # imaging
+         sdf usd usdGeom       # usd
+         usdImaging
++        python                # USD 26 bundled boost::python (pxr_boost)
+ 
+         TBB::tbb
+         Python::Python
+diff --git a/cmd/hd_cmd/hd_usd2rdl/CMakeLists.txt b/cmd/hd_cmd/hd_usd2rdl/CMakeLists.txt
+index 83d5456..8e524e5 100644
+--- a/cmd/hd_cmd/hd_usd2rdl/CMakeLists.txt
++++ b/cmd/hd_cmd/hd_usd2rdl/CMakeLists.txt
+@@ -27,6 +27,7 @@ target_link_libraries(${target}
+         cameraUtil hd hdx hf  # imaging
+         sdf usd usdGeom       # usd
+         usdImaging
++        python                # USD 26 bundled boost::python (pxr_boost)
+ 
+         TBB::tbb
+         Python::Python
+diff --git a/plugin/hd_moonray/RendererPlugin.cc b/plugin/hd_moonray/RendererPlugin.cc
+index b470c5d..7d01b0d 100644
+--- a/plugin/hd_moonray/RendererPlugin.cc
++++ b/plugin/hd_moonray/RendererPlugin.cc
+@@ -34,7 +34,16 @@ public:
+     void DeleteRenderDelegate(pxr::HdRenderDelegate *renderDelegate) override {
+         delete renderDelegate;
+     }
+-#if PXR_VERSION >= 2302
++#if PXR_VERSION >= 2603
++    // USD 26 added a pure-virtual IsSupported overload taking
++    // HdRendererCreateArgs. The bool-gpuEnabled overload is now deprecated
++    // and non-virtual, so we no longer override it.
++    bool IsSupported(
++        pxr::HdRendererCreateArgs const &/*rendererCreateArgs*/,
++        std::string */*reasonWhyNot*/ = nullptr) const override {
++        return true;
++    }
++#elif PXR_VERSION >= 2302
+     bool IsSupported(bool gpuEnabled = true) const override {
+         return true;
+     }
+diff --git a/plugin/hd_moonray_debug/RendererPlugin.cc b/plugin/hd_moonray_debug/RendererPlugin.cc
+index 36f713d..baa0de7 100644
+--- a/plugin/hd_moonray_debug/RendererPlugin.cc
++++ b/plugin/hd_moonray_debug/RendererPlugin.cc
+@@ -43,7 +43,16 @@ public:
+         delete renderDelegate;
+     }
+ 
+-#if PXR_VERSION >= 2302
++#if PXR_VERSION >= 2603
++    // USD 26 added a pure-virtual IsSupported overload taking
++    // HdRendererCreateArgs. The bool-gpuEnabled overload is now deprecated
++    // and non-virtual, so we no longer override it.
++    bool IsSupported(
++        pxr::HdRendererCreateArgs const &/*rendererCreateArgs*/,
++        std::string */*reasonWhyNot*/ = nullptr) const override {
++        return true;
++    }
++#elif PXR_VERSION >= 2302
+     bool IsSupported(bool gpuEnabled = true) const override {
+         return true;
+     }

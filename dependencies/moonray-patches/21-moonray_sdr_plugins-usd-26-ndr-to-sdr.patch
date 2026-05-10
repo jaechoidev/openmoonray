@@ -1,0 +1,413 @@
+diff --git a/moonrayShaderDiscovery/CMakeLists.txt b/moonrayShaderDiscovery/CMakeLists.txt
+index b262d79..3f38bc2 100644
+--- a/moonrayShaderDiscovery/CMakeLists.txt
++++ b/moonrayShaderDiscovery/CMakeLists.txt
+@@ -25,9 +25,9 @@ target_include_directories(${component}
+ target_link_libraries(${component}
+     PUBLIC
+         # pxr
+-        ar ndr sdr
++        ar sdr
+         Boost::headers
+-        # Python::Module
++        Python::Module
+ )
+ 
+ if(IsDarwinPlatform)
+diff --git a/moonrayShaderDiscovery/discoveryPlugin.cpp b/moonrayShaderDiscovery/discoveryPlugin.cpp
+index 724427e..5d5eb90 100644
+--- a/moonrayShaderDiscovery/discoveryPlugin.cpp
++++ b/moonrayShaderDiscovery/discoveryPlugin.cpp
+@@ -12,7 +12,7 @@
+ #include "pxr/usd/ar/resolver.h"
+ #include "pxr/usd/ar/resolverScopedCache.h"
+ 
+-#include "pxr/usd/ndr/debugCodes.h"
++#include "pxr/usd/sdr/declare.h"
+ 
+ PXR_NAMESPACE_OPEN_SCOPE
+ 
+@@ -20,11 +20,11 @@ TfToken moonrayNodeType("moonrayClass");
+ 
+ namespace {
+ 
+-bool examineFiles(NdrNodeDiscoveryResultVec* foundNodes,
+-                  NdrStringSet* foundNames,
+-                  const NdrDiscoveryPluginContext* context,
++bool examineFiles(SdrShaderNodeDiscoveryResultVec* foundNodes,
++                  SdrStringSet* foundNames,
++                  const SdrDiscoveryPluginContext* context,
+                   const std::string& dirPath,
+-                  const NdrStringVec& dirFileNames)
++                  const SdrStringVec& dirFileNames)
+ {
+     for (const std::string& fileName : dirFileNames) {
+         std::string extension = TfStringToLower(TfGetExtension(fileName));
+@@ -33,15 +33,15 @@ bool examineFiles(NdrNodeDiscoveryResultVec* foundNodes,
+             std::string className = TfStringGetBeforeSuffix(fileName, '.');
+ 
+             if (!foundNames->insert(className).second) {
+-                 TF_DEBUG(NDR_DISCOVERY).Msg(
+-                     "Duplicate moonray class [%s] found at URI [%s], ignoring.",
+-                     className.c_str(), uri.c_str());
++                // Duplicate moonray class — silently ignore. (USD 26 dropped
++                // ndr/debugCodes.h's NDR_DISCOVERY TF_DEBUG token; sdr has
++                // no public discovery debug code, so the trace is dropped.)
+                 continue;
+             }
+ 
+             foundNodes->emplace_back(
+-                NdrIdentifier(className),          // Identifier
+-                NdrVersion().GetAsDefault(),       // Version
++                SdrIdentifier(className),          // Identifier
++                SdrVersion().GetAsDefault(),       // Version
+                 className,                         // Name
+                 TfToken(),                         // Family
+                 moonrayNodeType,                   // DiscoveryType
+@@ -57,7 +57,7 @@ bool examineFiles(NdrNodeDiscoveryResultVec* foundNodes,
+ }
+ } // namespace {
+ 
+-const NdrStringVec&
++const SdrStringVec&
+ MoonrayDiscoveryPlugin::GetSearchURIs() const
+ {
+     return _searchPaths;
+@@ -71,11 +71,11 @@ MoonrayDiscoveryPlugin::MoonrayDiscoveryPlugin()
+     }
+ }
+ 
+-NdrNodeDiscoveryResultVec
+-MoonrayDiscoveryPlugin::DiscoverNodes(const Context& context)
++SdrShaderNodeDiscoveryResultVec
++MoonrayDiscoveryPlugin::DiscoverShaderNodes(const Context& context)
+ {
+-    NdrNodeDiscoveryResultVec foundNodes;
+-    NdrStringSet foundNames;
++    SdrShaderNodeDiscoveryResultVec foundNodes;
++    SdrStringSet foundNames;
+     ArResolverScopedCache resolverCache;
+ 
+     for (const std::string& searchPath : _searchPaths) {
+@@ -103,6 +103,6 @@ MoonrayDiscoveryPlugin::DiscoverNodes(const Context& context)
+     return foundNodes;
+ }
+ 
+-NDR_REGISTER_DISCOVERY_PLUGIN(MoonrayDiscoveryPlugin);
++SDR_REGISTER_DISCOVERY_PLUGIN(MoonrayDiscoveryPlugin);
+ 
+ PXR_NAMESPACE_CLOSE_SCOPE
+diff --git a/moonrayShaderDiscovery/discoveryPlugin.h b/moonrayShaderDiscovery/discoveryPlugin.h
+index 7407f62..6282f65 100644
+--- a/moonrayShaderDiscovery/discoveryPlugin.h
++++ b/moonrayShaderDiscovery/discoveryPlugin.h
+@@ -7,25 +7,25 @@
+ #include "pxr/pxr.h"
+ #include "pxr/base/tf/token.h"
+ 
+-#include "pxr/usd/ndr/declare.h"
+-#include "pxr/usd/ndr/discoveryPlugin.h"
+-#include "pxr/usd/ndr/parserPlugin.h"
++#include "pxr/usd/sdr/declare.h"
++#include "pxr/usd/sdr/discoveryPlugin.h"
++#include "pxr/usd/sdr/parserPlugin.h"
+ 
+ PXR_NAMESPACE_OPEN_SCOPE
+ 
+-class MoonrayDiscoveryPlugin : public NdrDiscoveryPlugin {
++class MoonrayDiscoveryPlugin : public SdrDiscoveryPlugin {
+ public:
+     MoonrayDiscoveryPlugin();
+ 
+     ~MoonrayDiscoveryPlugin() override = default;
+ 
+-    virtual NdrNodeDiscoveryResultVec DiscoverNodes(const Context &context)
++    virtual SdrShaderNodeDiscoveryResultVec DiscoverShaderNodes(const Context &context)
+         override;
+ 
+-    virtual const NdrStringVec& GetSearchURIs() const override;
++    virtual const SdrStringVec& GetSearchURIs() const override;
+ 
+ private:
+-    NdrStringVec _searchPaths;
++    SdrStringVec _searchPaths;
+ };
+ 
+ PXR_NAMESPACE_CLOSE_SCOPE
+diff --git a/moonrayShaderDiscovery/moduleDeps.cpp b/moonrayShaderDiscovery/moduleDeps.cpp
+index cc9aced..4a9110c 100644
+--- a/moonrayShaderDiscovery/moduleDeps.cpp
++++ b/moonrayShaderDiscovery/moduleDeps.cpp
+@@ -14,7 +14,7 @@ TF_REGISTRY_FUNCTION(TfScriptModuleLoader) {
+     // List of direct dependencies for this library.
+     const std::vector<TfToken> reqs = {
+         TfToken("ar"),
+-        TfToken("ndr"),
++        TfToken("sdr"),
+         TfToken("sdr")
+     };
+     TfScriptModuleLoader::GetInstance().
+diff --git a/moonrayShaderParser/CMakeLists.txt b/moonrayShaderParser/CMakeLists.txt
+index a5a2365..c4708f3 100644
+--- a/moonrayShaderParser/CMakeLists.txt
++++ b/moonrayShaderParser/CMakeLists.txt
+@@ -33,9 +33,9 @@ target_include_directories(${component}
+ target_link_libraries(${component}
+     PUBLIC
+         # pxr
+-        ar ndr sdr
++        ar sdr
+         Boost::headers
+-        # Python::Module
++        Python::Module
+ )
+ 
+ if(NOT IsDarwinPlatform)
+diff --git a/moonrayShaderParser/moduleDeps.cpp b/moonrayShaderParser/moduleDeps.cpp
+index 5c6330d..af6d98d 100644
+--- a/moonrayShaderParser/moduleDeps.cpp
++++ b/moonrayShaderParser/moduleDeps.cpp
+@@ -14,7 +14,7 @@ TF_REGISTRY_FUNCTION(TfScriptModuleLoader) {
+     // List of direct dependencies for this library.
+     const std::vector<TfToken> reqs = {
+         TfToken("ar"),
+-        TfToken("ndr"),
++        TfToken("sdr"),
+         TfToken("sdr")
+     };
+     TfScriptModuleLoader::GetInstance().
+diff --git a/moonrayShaderParser/parserPlugin.cpp b/moonrayShaderParser/parserPlugin.cpp
+index 2e6bf88..d4acd1d 100644
+--- a/moonrayShaderParser/parserPlugin.cpp
++++ b/moonrayShaderParser/parserPlugin.cpp
+@@ -18,7 +18,7 @@
+ #include <pxr/base/vt/array.h>
+ 
+ #include "pxr/usd/ar/resolver.h"
+-#include "pxr/usd/ndr/nodeDiscoveryResult.h"
++#include "pxr/usd/sdr/shaderNodeDiscoveryResult.h"
+ #include "pxr/usd/sdr/shaderNode.h"
+ #include "pxr/usd/sdr/shaderProperty.h"
+ 
+@@ -193,7 +193,7 @@ const TfToken getNodeContext(const JsObject& definition)
+     return TfToken(nodeType);
+ }
+ 
+-NdrTokenMap getNodeMetadata(const NdrTokenMap &baseMetadata,
++SdrTokenMap getNodeMetadata(const SdrTokenMap &baseMetadata,
+                             const JsObject& definition)
+ {
+     // we don't have any special metadata
+@@ -204,17 +204,17 @@ SdrShaderProperty* makeOutputProperty(const std::string& nodeType)
+ {
+     if (nodeType == "Material" || nodeType == "Volume") {
+         return new SdrShaderProperty(TfToken("out"), SdrPropertyTypes->Terminal, VtValue(TfToken()),
+-                                     true, 0, NdrTokenMap(), NdrTokenMap(), NdrOptionVec());
++                                     true, 0, SdrTokenMap(), SdrTokenMap(), SdrOptionVec());
+     }
+     if (nodeType == "Map" || nodeType == "Displacement") {
+         return new SdrShaderProperty(TfToken("out"), SdrPropertyTypes->Float, VtValue(GfVec3f(0,0,0)),
+-                                     true, 3, NdrTokenMap(), NdrTokenMap(), NdrOptionVec());
++                                     true, 3, SdrTokenMap(), SdrTokenMap(), SdrOptionVec());
+     }
+     return nullptr;
+ }
+ 
+-NdrPropertyUniquePtrVec
+-getNodeProperties(const NdrNodeDiscoveryResult& discoveryResult,
++SdrShaderPropertyUniquePtrVec
++getNodeProperties(const SdrShaderNodeDiscoveryResult& discoveryResult,
+                   const JsObject& definition)
+ {
+     // groups are defined by listing the attributes in them : we need
+@@ -240,7 +240,7 @@ getNodeProperties(const NdrNodeDiscoveryResult& discoveryResult,
+         attributes = definition.at("attributes").GetJsObject();
+         numAttributes = attributes.size();
+     }
+-    NdrPropertyUniquePtrVec properties(numAttributes);
++    SdrShaderPropertyUniquePtrVec properties(numAttributes);
+ 
+     for (const auto& attribute : attributes) {
+         const std::string& attrName = attribute.first;
+@@ -254,7 +254,7 @@ getNodeProperties(const NdrNodeDiscoveryResult& discoveryResult,
+ 
+         VtValue propDefault = convertDefault(attrDefault,attrType);
+ 
+-        NdrTokenMap metadata;
++        SdrTokenMap metadata;
+         auto mdIt = attrData.find("metadata");
+         if (mdIt != attrData.end()) {
+             const JsObject& attrMetadata = mdIt->second.GetJsObject();
+@@ -294,9 +294,9 @@ getNodeProperties(const NdrNodeDiscoveryResult& discoveryResult,
+         }
+ 
+         // we don't have any additional UI hints
+-        NdrTokenMap hints;
++        SdrTokenMap hints;
+ 
+-        NdrOptionVec options;
++        SdrOptionVec options;
+         auto enumIt = attrData.find("enum");
+         if (enumIt != attrData.end()) {
+             // type for an enum should be string (per Usd), not int (per RDL)
+@@ -339,7 +339,7 @@ getNodeProperties(const NdrNodeDiscoveryResult& discoveryResult,
+ 
+ } // namespace {
+ 
+-NDR_REGISTER_PARSER_PLUGIN(MoonrayParserPlugin);
++SDR_REGISTER_PARSER_PLUGIN(MoonrayParserPlugin);
+ 
+ TF_DEFINE_PRIVATE_TOKENS(
+     _tokens,
+@@ -350,10 +350,10 @@ TF_DEFINE_PRIVATE_TOKENS(
+ 
+ );
+ 
+-const NdrTokenVec&
++const SdrTokenVec&
+ MoonrayParserPlugin::GetDiscoveryTypes() const
+ {
+-    static const NdrTokenVec _DiscoveryTypes = {_tokens->discoveryType};
++    static const SdrTokenVec _DiscoveryTypes = {_tokens->discoveryType};
+     return _DiscoveryTypes;
+ }
+ 
+@@ -363,13 +363,13 @@ MoonrayParserPlugin::GetSourceType() const
+     return _tokens->sourceType;
+ }
+ 
+-NdrNodeUniquePtr
+-MoonrayParserPlugin::Parse(const NdrNodeDiscoveryResult& discoveryResult)
++SdrShaderNodeUniquePtr
++MoonrayParserPlugin::ParseShaderNode(const SdrShaderNodeDiscoveryResult& discoveryResult)
+ {
+     if (discoveryResult.uri.empty()) {
+-        TF_WARN("Invalid NdrNodeDiscoveryResult with identifier %s: uri is empty.",
++        TF_WARN("Invalid SdrShaderNodeDiscoveryResult with identifier %s: uri is empty.",
+                 discoveryResult.identifier.GetText());
+-         return NdrParserPlugin::GetInvalidNode(discoveryResult);
++         return SdrParserPlugin::GetInvalidShaderNode(discoveryResult);
+     }
+ 
+ #if AR_VERSION == 1
+@@ -382,7 +382,7 @@ MoonrayParserPlugin::Parse(const NdrNodeDiscoveryResult& discoveryResult)
+     if (!localFetchSuccessful) {
+         TF_WARN("Could not localize the Moonray shader definition at URI [%s] into a local path.",
+                 discoveryResult.uri.c_str());
+-        return NdrParserPlugin::GetInvalidNode(discoveryResult);
++        return SdrParserPlugin::GetInvalidShaderNode(discoveryResult);
+     }
+ #endif
+ 
+@@ -391,7 +391,7 @@ MoonrayParserPlugin::Parse(const NdrNodeDiscoveryResult& discoveryResult)
+     if (ifs.fail()) {
+         TF_WARN("Could not open the Moonray shader definition at URI [%s]. ",
+                 discoveryResult.resolvedUri.c_str());
+-        return NdrParserPlugin::GetInvalidNode(discoveryResult);
++        return SdrParserPlugin::GetInvalidShaderNode(discoveryResult);
+     }
+ 
+     try {
+@@ -401,12 +401,12 @@ MoonrayParserPlugin::Parse(const NdrNodeDiscoveryResult& discoveryResult)
+             TF_WARN("JSON error parsing Moonray shader definition at URI [%s]: line %d col %d : %s",
+                     discoveryResult.resolvedUri.c_str(),
+                     error.line,error.column,error.reason.c_str());
+-            return NdrParserPlugin::GetInvalidNode(discoveryResult);
++            return SdrParserPlugin::GetInvalidShaderNode(discoveryResult);
+         }
+ 
+         const JsObject& definition = jsDef.GetJsObject().at("scene_classes").
+             GetJsObject().at(discoveryResult.name).GetJsObject();
+-        return NdrNodeUniquePtr(new SdrShaderNode(
++        return SdrShaderNodeUniquePtr(new SdrShaderNode(
+                                     discoveryResult.identifier,
+                                     discoveryResult.version,
+                                     discoveryResult.name,
+@@ -423,7 +423,7 @@ MoonrayParserPlugin::Parse(const NdrNodeDiscoveryResult& discoveryResult)
+                 "An invalid Sdr node definition will be created.",
+                 e.what(), discoveryResult.resolvedUri.c_str());
+     }
+-    return NdrParserPlugin::GetInvalidNode(discoveryResult);
++    return SdrParserPlugin::GetInvalidShaderNode(discoveryResult);
+ }
+ 
+ PXR_NAMESPACE_CLOSE_SCOPE
+diff --git a/moonrayShaderParser/parserPlugin.h b/moonrayShaderParser/parserPlugin.h
+index 1c55f82..c938036 100644
+--- a/moonrayShaderParser/parserPlugin.h
++++ b/moonrayShaderParser/parserPlugin.h
+@@ -7,24 +7,24 @@
+ #include "pxr/pxr.h"
+ #include "pxr/base/tf/token.h"
+ 
+-#include "pxr/usd/ndr/declare.h"
+-#include "pxr/usd/ndr/parserPlugin.h"
++#include "pxr/usd/sdr/declare.h"
++#include "pxr/usd/sdr/parserPlugin.h"
+ 
+ PXR_NAMESPACE_OPEN_SCOPE
+ 
+-class NdrNode;
+-class NdrNodeDiscoveryResult;
++class SdrShaderNode;
++class SdrShaderNodeDiscoveryResult;
+ 
+-class MoonrayParserPlugin : public NdrParserPlugin {
++class MoonrayParserPlugin : public SdrParserPlugin {
+ public:
+     MoonrayParserPlugin() = default;
+ 
+     ~MoonrayParserPlugin() override = default;
+ 
+-    NdrNodeUniquePtr Parse(const NdrNodeDiscoveryResult &discoveryResult)
++    SdrShaderNodeUniquePtr ParseShaderNode(const SdrShaderNodeDiscoveryResult &discoveryResult)
+         override;
+ 
+-    const NdrTokenVec &GetDiscoveryTypes() const override;
++    const SdrTokenVec &GetDiscoveryTypes() const override;
+ 
+     const TfToken &GetSourceType() const override;
+ 
+diff --git a/moonrayShaderParser/sdr_dump.cpp b/moonrayShaderParser/sdr_dump.cpp
+index 4a640c8..eef0293 100644
+--- a/moonrayShaderParser/sdr_dump.cpp
++++ b/moonrayShaderParser/sdr_dump.cpp
+@@ -35,7 +35,7 @@ void dumpProperty(SdrShaderPropertyConstPtr prop)
+     std::tie<SdfValueTypeName,TfToken>(sdfTypeName,backupType) = prop->GetTypeAsSdfType();
+     TfToken sdfType = sdfTypeName.GetAsToken();
+     TfToken propType = prop->GetType();
+-    const NdrOptionVec& options = prop->GetOptions();
++    const SdrOptionVec& options = prop->GetOptions();
+     if (!options.empty()) propType = TfToken("enum");
+ 
+     std::cout << TABSTR;
+@@ -55,7 +55,7 @@ void dumpProperty(SdrShaderPropertyConstPtr prop)
+         }
+         std::cout << std::endl;
+     }
+-    const NdrTokenMap&  metadata = prop->GetMetadata();
++    const SdrTokenMap&  metadata = prop->GetMetadata();
+     for (const auto& item : metadata) {
+         std::cout << TABSTR << TABSTR << "* " << item.first << " = " << item.second << std::endl;
+     }
+@@ -80,17 +80,17 @@ void dumpNode(SdrShaderNodeConstPtr node)
+               << "IsValid:    " << node->IsValid() << std::endl;
+ 
+     std::cout << "INPUTS:" << std::endl;
+-    const NdrTokenVec& inputNames = node->GetInputNames();
++    const SdrTokenVec& inputNames = node->GetInputNames();
+     for (const TfToken& name : inputNames) {
+         dumpProperty(node->GetShaderInput(name));
+     }
+     std::cout << "OUTPUTS:" << std::endl;
+-    const NdrTokenVec& outputNames = node->GetOutputNames();
++    const SdrTokenVec& outputNames = node->GetOutputNames();
+     for (const TfToken& name : outputNames) {
+         dumpProperty(node->GetShaderOutput(name));
+     }
+     std::cout << "METADATA:" << std::endl;
+-    const NdrTokenMap& metadata = node->GetMetadata();
++    const SdrTokenMap& metadata = node->GetMetadata();
+     for (const auto& item : metadata) {
+         std::cout << TABSTR << "* " << item.first << " = " << item.second << std::endl;
+     }
