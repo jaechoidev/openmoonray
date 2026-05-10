@@ -24,14 +24,17 @@ against new Moonray releases periodically (every 2–3 months).
 
 ## Plan
 
-Full port plan lives in the companion Gaffer fork:
+Full port plan and operational runbook live in the shared planning
+directory (sibling to both repos, mounted at `/work/PLAN/` in the
+container):
 
-- Sibling clone: `../gaffer/contrib/moonray/PLAN.md`
-- Inside the build container: `/work/gaffer/contrib/moonray/PLAN.md`
-- GitHub: https://github.com/jaechoidev/gaffer/blob/claude/moonray-gaffer-planning-deg3f/contrib/moonray/PLAN.md
+- Host:      `../PLAN/PLAN.md`, `../PLAN/WORKFLOW.md`
+- Container: `/work/PLAN/PLAN.md`, `/work/PLAN/WORKFLOW.md`
 
-The operational runbook (Pattern A workflow, container setup, `dexec`
-helper, daily commands) lives at `../gaffer/contrib/moonray/WORKFLOW.md`.
+PLAN.md is the canonical port plan; WORKFLOW.md is the Pattern A
+operational runbook (container setup, `dexec` helper, daily commands).
+Both are owned by neither session — they're shared so updates from
+either side are immediately visible to the other.
 
 This session owns **Phase 0 only** — porting Moonray's build to match
 Gaffer's dep stack and producing a working install at
@@ -58,7 +61,7 @@ When Phase 0 is complete, hand off to the Gaffer session:
 ## Build commands
 
 All builds run inside the `gaffer-build` Docker container via the
-`dexec` wrapper on the host PATH (see `../gaffer/contrib/moonray/WORKFLOW.md`).
+`dexec` wrapper on the host PATH (see `../PLAN/WORKFLOW.md`).
 Example:
 
     dexec cmake --build /work/openmoonray/build --parallel
