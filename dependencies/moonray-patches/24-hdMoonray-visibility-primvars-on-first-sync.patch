@@ -1,0 +1,41 @@
+hdMoonray: read moonray:visible_* primvars on first sync, not just post-forceInvisible
+
+GeometryMixin::restoreVisibility had an early-return guard
+(if (!mForcedInvisible) return;) that skipped reading the per-
+component visibility primvars on visible rprims that hadn't
+been previously force-invisible. Per-component visibility flags
+(moonray:visible_in_camera / visible_shadow / etc.) only reached
+RDL2 if the rprim went through an invisible→visible transition
+during IPR. One-shot batch renders silently ignored the authored
+primvars and used RDL2 defaults (all true).
+
+Surfaced in GafferMoonray Phase 5-A: IECoreMoonray::Attributes
+translates Cortex moonray:visibility:<component> into
+moonray:visible_* primvars on the rprim, but they didn't reach
+the RdlMeshGeometry body in the RDLA dump.
+
+Fix: drop the early return, always re-read on the visible branch.
+Cost: 9 GetPrimvar calls per visibility-dirty cycle. Negligible.
+
+Apply path: hdMoonray submodule (scope: hdMoonray).
+
+diff --git a/lib/hydramoonray/GeometryMixin.cc b/lib/hydramoonray/GeometryMixin.cc
+index fcd81ea..b8c0610 100644
+--- a/lib/hydramoonray/GeometryMixin.cc
++++ b/lib/hydramoonray/GeometryMixin.cc
+@@ -303,9 +303,12 @@ GeometryMixin::forceInvisible()
+ void
+ GeometryMixin::restoreVisibility(HdSceneDelegate* sceneDelegate)
+ {
+-    // check that we are in a forced invisible state
+-    if (!mForcedInvisible) return;
+-    // we have to reread every primvar that affects visibility
++    // Always read the per-component visibility primvars on the visible
++    // branch, not just when transitioning out of forceInvisible. The old
++    // early-return (`if (!mForcedInvisible) return;`) meant first-sync
++    // visible rprims silently ignored authored moonray:visible_* primvars
++    // and got RDL2 defaults instead — surfaced when GafferMoonray
++    // authored per-component visibility on a one-shot batch render.
+     for (const auto& i : visibleAttrs) {
+         VtValue val = rprim.GetPrimvar(sceneDelegate, i.usdKey);
+         bool vis = true;
