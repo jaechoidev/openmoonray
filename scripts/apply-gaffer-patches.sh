@@ -67,8 +67,20 @@ for p in "${patches[@]}"; do
         echo "[apply] $fname -> $target"
         git apply "$abs_patch"
     else
-        echo "[FAIL]  $fname -> $target (rejects below)" >&2
+        echo "[FAIL]  $fname -> $target (rejects written below)" >&2
         git apply --reject "$abs_patch" || true
+        cat >&2 <<EOF
+
+  Recovery:
+    cd $(realpath "$target")
+    git checkout -- .                  # discard partial apply + .rej files
+    # then resolve why the patch no longer applies (rebase against
+    # upstream? regenerate the patch from a fresh working tree?)
+    # and re-run scripts/apply-gaffer-patches.sh from the toplevel.
+
+  Listing .rej files left behind:
+EOF
+        find . -name '*.rej' >&2 2>/dev/null || true
         popd >/dev/null
         exit 1
     fi

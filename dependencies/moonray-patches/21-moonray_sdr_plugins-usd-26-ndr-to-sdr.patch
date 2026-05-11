@@ -1,3 +1,36 @@
+moonray_sdr_plugins: USD 26 ndr→sdr migration
+
+USD 26 dropped the `ndr` library and renamed types to `Sdr*`. Source-
+level migration of moonray_sdr_plugins (the moonshine SceneClass →
+USD shader-node bridge):
+
+- `pxr/usd/ndr/*` → `pxr/usd/sdr/*` includes
+- `Ndr*` → `Sdr*` types (with `SdrShader*` prefix where USD 26 added one:
+  `NdrNode` → `SdrShaderNode`, `NdrPropertyUniquePtrVec` →
+  `SdrShaderPropertyUniquePtrVec`, `NdrNodeDiscoveryResult` →
+  `SdrShaderNodeDiscoveryResult`, etc.)
+- `NDR_REGISTER_DISCOVERY_PLUGIN` → `SDR_REGISTER_DISCOVERY_PLUGIN`
+- `NDR_REGISTER_PARSER_PLUGIN` → `SDR_REGISTER_PARSER_PLUGIN`
+- `DiscoverNodes` → `DiscoverShaderNodes` (virtual rename)
+- `Parse` → `ParseShaderNode` (virtual rename)
+- `GetInvalidNode` → `GetInvalidShaderNode` (static helper rename)
+- TF_DEBUG(NDR_DISCOVERY) — there's no Sdr equivalent debug code; the
+  duplicate-class warning is dropped (silent ignore).
+- CMakeLists: drop `ndr` from target_link_libraries (no longer linked
+  by USD 26); also uncomment `Python::Module` to provide pyconfig.h
+  via interface include for USD 26's bundled boost::python.
+- moduleDeps.cpp: drop `TfToken("ndr")` from the reqs vector.
+
+Apply path: moonray_sdr_plugins submodule (scope: moonray_sdr_plugins).
+
+Note: this patch is unconditional (not gated on `PXR_VERSION`). To
+make it upstream-acceptable to DreamWorks, the C++ source changes
+should be wrapped in `#if PXR_VERSION >= 2603 ... #else ... #endif`
+guards keeping the legacy `Ndr*` paths intact for older USD builds.
+The moduleDeps and CMakeLists changes can stay unconditional with a
+build-time check on USD version. This is documented in the upstream-
+submission ledger at PHASE0_STATUS.md / report-from-moonray.md.
+
 diff --git a/moonrayShaderDiscovery/CMakeLists.txt b/moonrayShaderDiscovery/CMakeLists.txt
 index b262d79..3f38bc2 100644
 --- a/moonrayShaderDiscovery/CMakeLists.txt
@@ -135,15 +168,14 @@ index 7407f62..6282f65 100644
  
  PXR_NAMESPACE_CLOSE_SCOPE
 diff --git a/moonrayShaderDiscovery/moduleDeps.cpp b/moonrayShaderDiscovery/moduleDeps.cpp
-index cc9aced..4a9110c 100644
+index cc9aced..4695970 100644
 --- a/moonrayShaderDiscovery/moduleDeps.cpp
 +++ b/moonrayShaderDiscovery/moduleDeps.cpp
-@@ -14,7 +14,7 @@ TF_REGISTRY_FUNCTION(TfScriptModuleLoader) {
+@@ -14,7 +14,6 @@ TF_REGISTRY_FUNCTION(TfScriptModuleLoader) {
      // List of direct dependencies for this library.
      const std::vector<TfToken> reqs = {
          TfToken("ar"),
 -        TfToken("ndr"),
-+        TfToken("sdr"),
          TfToken("sdr")
      };
      TfScriptModuleLoader::GetInstance().
@@ -164,15 +196,14 @@ index a5a2365..c4708f3 100644
  
  if(NOT IsDarwinPlatform)
 diff --git a/moonrayShaderParser/moduleDeps.cpp b/moonrayShaderParser/moduleDeps.cpp
-index 5c6330d..af6d98d 100644
+index 5c6330d..58b9346 100644
 --- a/moonrayShaderParser/moduleDeps.cpp
 +++ b/moonrayShaderParser/moduleDeps.cpp
-@@ -14,7 +14,7 @@ TF_REGISTRY_FUNCTION(TfScriptModuleLoader) {
+@@ -14,7 +14,6 @@ TF_REGISTRY_FUNCTION(TfScriptModuleLoader) {
      // List of direct dependencies for this library.
      const std::vector<TfToken> reqs = {
          TfToken("ar"),
 -        TfToken("ndr"),
-+        TfToken("sdr"),
          TfToken("sdr")
      };
      TfScriptModuleLoader::GetInstance().

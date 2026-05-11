@@ -1,3 +1,51 @@
+hdMoonray: USD 26 IsSupported override + pxr_python link for cmd binaries
+
+USD 26 added a new pure-virtual `IsSupported` overload on
+`HdRendererPlugin`:
+
+  virtual bool IsSupported(
+      HdRendererCreateArgs const &rendererCreateArgs,
+      std::string *reasonWhyNot = nullptr) const = 0;
+
+The pre-26 `IsSupported(bool gpuEnabled = true)` overload became
+deprecated and non-virtual. hdMoonray's `HdMoonrayRendererPlugin`
+and `HdMoonrayRendererDebugPlugin` only overrode the legacy form
+→ the class stays abstract under USD 26 → `new T` fails inside
+`HfPluginRegistry::_CreatePlugin()`.
+
+Fix: add the new override gated on `PXR_VERSION >= 2603` so older
+USD builds still see the legacy form:
+
+  #if PXR_VERSION >= 2603
+      bool IsSupported(pxr::HdRendererCreateArgs const&,
+                       std::string* = nullptr) const override { return true; }
+  #elif PXR_VERSION >= 2302
+      bool IsSupported(bool gpuEnabled = true) const override { return true; }
+  #else
+      bool IsSupported() const override { return true; }
+  #endif
+
+Also: the `hd_render` and `hd_usd2rdl` standalone command binaries
+need to link `libusd_python.so` directly (USD 26 moved its bundled
+boost::python implementation into a separate library; previously it
+was statically pulled in by other USD libs). Adds a lowercase
+`python` entry to their `target_link_libraries`.
+
+DEPENDENCY on the cmake-shim: the lowercase `python` target name
+matches an `IMPORTED` target the pxr cmake shim creates for
+`libusd_python.so` (see `building/gaffer/setup-gaffer-deps.sh`,
+which generates `pxrTargets.cmake` with one IMPORTED target per
+`libusd_*.so` discovered in the dep tarball, naming each by its
+`libusd_<name>` suffix). Without the shim, `target_link_libraries(...
+python)` fails to resolve. The shim is set up unconditionally by
+the gaffer-release preset, so this dependency is always satisfied
+in our build path; flagging it here for upstream-submission
+preparedness (an upstream variant should use a CMake-version-gated
+fully-qualified target like `pxr::python` and document its
+availability across USD versions).
+
+Apply path: hdMoonray submodule (scope: hdMoonray).
+
 diff --git a/cmd/hd_cmd/hd_render/CMakeLists.txt b/cmd/hd_cmd/hd_render/CMakeLists.txt
 index 6ac48cb..2d4713c 100644
 --- a/cmd/hd_cmd/hd_render/CMakeLists.txt
@@ -22,6 +70,26 @@ index 83d5456..8e524e5 100644
  
          TBB::tbb
          Python::Python
+diff --git a/lib/hydramoonray/GeometryMixin.cc b/lib/hydramoonray/GeometryMixin.cc
+index fcd81ea..b8c0610 100644
+--- a/lib/hydramoonray/GeometryMixin.cc
++++ b/lib/hydramoonray/GeometryMixin.cc
+@@ -303,9 +303,12 @@ GeometryMixin::forceInvisible()
+ void
+ GeometryMixin::restoreVisibility(HdSceneDelegate* sceneDelegate)
+ {
+-    // check that we are in a forced invisible state
+-    if (!mForcedInvisible) return;
+-    // we have to reread every primvar that affects visibility
++    // Always read the per-component visibility primvars on the visible
++    // branch, not just when transitioning out of forceInvisible. The old
++    // early-return (`if (!mForcedInvisible) return;`) meant first-sync
++    // visible rprims silently ignored authored moonray:visible_* primvars
++    // and got RDL2 defaults instead — surfaced when GafferMoonray
++    // authored per-component visibility on a one-shot batch render.
+     for (const auto& i : visibleAttrs) {
+         VtValue val = rprim.GetPrimvar(sceneDelegate, i.usdKey);
+         bool vis = true;
 diff --git a/plugin/hd_moonray/RendererPlugin.cc b/plugin/hd_moonray/RendererPlugin.cc
 index b470c5d..7d01b0d 100644
 --- a/plugin/hd_moonray/RendererPlugin.cc

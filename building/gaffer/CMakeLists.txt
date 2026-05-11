@@ -26,6 +26,14 @@ include(ExternalProject)
 set(InstallRoot /work/_install/gaffer-deps CACHE FILEPATH "Install prefix")
 
 # ISPC — Moonray's ISPC compiler. Binary release; just drop in bin/.
+#
+# Why bin-only (not the full release tree): the ispc binary ships
+# stdlib + per-ISA codegen built into the binary itself (verified via
+# `strings ispc | grep stdlib` shows the bitcode strings inline, and
+# all ISA targets sse2/sse4/avx/avx2/avx512* respond to --target=...
+# without needing the release's lib/ directory). The lib/ tree in the
+# tarball is examples/docs/license, not runtime-required. Copying
+# bin/ispc alone is sufficient for compilation.
 ExternalProject_Add(ISPC
     URL https://github.com/ispc/ispc/releases/download/v1.21.0/ispc-v1.21.0-linux.tar.gz
     BUILD_IN_SOURCE 1

@@ -73,6 +73,19 @@ fi
 
 # ---- Step 3: build the shim overlay -------------------------------------
 
+# Sanity-guard the rm -rf: SHIM_PREFIX is env-overridable, and an
+# accidental override to a parent dir (e.g. SHIM_PREFIX=/work) would
+# wipe huge amounts of unrelated state. Require the path to end in
+# /gaffer-deps-shim before nuking.
+case "$SHIM_PREFIX" in
+    */gaffer-deps-shim) ;;
+    *)
+        echo "ERROR: refusing to rm -rf '$SHIM_PREFIX' — does not end in /gaffer-deps-shim." >&2
+        echo "       If this is a deliberate override, rename the dir to end in /gaffer-deps-shim." >&2
+        exit 1
+        ;;
+esac
+
 rm -rf "$SHIM_PREFIX"
 mkdir -p "$SHIM_PREFIX/lib/cmake"
 
